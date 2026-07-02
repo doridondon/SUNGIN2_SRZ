@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>MOBILE WebGL VER 3.0</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=CEB52025-E065-364C-9DBA-44880E3B02B8"></script>
+
+<style>
+html, body {
+    margin:0; padding:0; width:100%; height:100%; overflow: hidden;
+}
+#vmap{
+    width:100%; height:100%;
+}
+.layer-control {
+    position: absolute; top: 15px; left: 15px; z-index: 1000;
+    background: rgba(255, 255, 255, 0.95); padding: 12px 16px;
+    border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; max-height: 80vh; overflow-y: auto; width: 200px;
+}
+.layer-section { margin-bottom: 10px; padding-bottom: 5px; }
+.layer-section:not(:last-child) { border-bottom: 1px solid #eee; }
+.layer-section-title { font-weight: bold; margin-bottom: 6px; color: #555; font-size: 12px; }
+.layer-item { display: flex; align-items: center; margin-bottom: 8px; cursor: pointer; user-select: none; }
+.layer-item:last-child { margin-bottom: 0; }
+.layer-item input { margin-right: 8px; width: 18px; height: 18px; accent-color: #2563eb; cursor: pointer; }
+
+.legend-box { margin-top: 4px; margin-left: 26px; display: none; }
+.legend-box img { max-width: 150px; border: 1px solid #ccc; background: #fff; }
+.map-mode-select { width: 100%; padding: 6px 8px; border-radius: 4px; border: 1px solid #ccc; font-size: 13px; background-color: #fff; cursor: pointer; }
+
+/* 📌 팝업 오버레이 스타일 추가 */
+.ol-popup {
+    position: absolute; background-color: white; padding: 15px;
+    border-radius: 8px; border: 1px solid #cccccc; bottom: 12px; left: -50px;
+    min-width: 260px; max-width: 350px; max-height: 250px; overflow-y: auto;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2); font-family: sans-serif; font-size: 12px; z-index: 2000;
+}
+.ol-popup:after, .ol-popup:before {
+    top: 100%; border: solid transparent; content: " "; height: 0; width: 0; position: absolute; pointer-events: none;
+}
+.ol-popup:after { border-top-color: white; border-width: 10px; left: 50px; margin-left: -10px; }
+.ol-popup:before { border-top-color: #cccccc; border-width: 11px; left: 50px; margin-left: -11px; }
+.popup-closer { text-decoration: none; position: absolute; top: 8px; right: 8px; font-weight: bold; color: #888; cursor: pointer; }
+.popup-closer:after { content: "✖"; }
+
+/* 📊 결과 테이블 스타일 추가 */
+.wfs-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.wfs-table th, .wfs-table td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+.wfs-table th { background-color: #f4f4f4; color: #333; font-weight: bold; width: 40%; }
+.wfs-table tr:nth-child(even) { background-color: #f9f9f9; }
+</style>
+</head>
+
+<body>
+
+<div id="vmap"></div>
+
+<form id="wfsForm" style="display:none;">
+    <input type="hidden" name="key" value="CEB52025-E065-364C-9DBA-44880E3B02B8">
+    <input type="hidden" name="SERVICE" value="WFS">
+    <input type="hidden" name="VERSION" value="1.1.0">
+    <input type="hidden" name="REQUEST" value="GetFeature">
+    <input type="hidden" name="TYPENAME" id="wfs-typename" value="">
+    <input type="hidden" name="OUTPUT" value="text/javascript">
+    <input type="hidden" name="SRSNAME" value="">
+    <input type="hidden" name="BBOX" value="">
+</form>
+
+<div class="layer-control">
+    <div class="layer-section">
+        <div class="layer-section-title">기본 구역</div>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-garo" checked>
+            <span>가로주택 2구역 (적색)</span>
+        </label>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-sinsok" checked>
+            <span>신속통합요청 (청색)</span>
+        </label>
+    </div>
+    
+    <div class="layer-section" id="wms-layer-section">
+        <div class="layer-section-title">WMS 주제도 / WFS 클릭 조회</div>
+    </div>
+
+    <div class="layer-section">
+        <div class="layer-section-title">지도 모드 변경</div>
+        <select id="map-mode-selector" class="map-mode-select">
+            <option value="2d-map" selected>2D 지도</option>
+            <option value="3d-map">3D 지도</option>
+        </select>
+    </div>
+</div>
+
+<div id="popup" class="ol-popup">
+    <a href="#" id="popup-closer" class="popup-closer"></a>
+    <div id="popup-content"></div>
+</div>
+
+<script>
+
+//=========================
+// VWorld Map 생성
+//=========================
+vw.MapControllerOption = {
+    container : "vmap",
+    mapMode : "2d-map",
+    basemapType : vw.ol3.BasemapType.GRAPHIC,
+    controlDensity : vw.ol3.DensityType.BASIC,
+    interactionDensity : vw.ol3.DensityType.BASIC,
+    controlsAutoArrange : true,
+    homePosition : vw.ol3.CameraPosition,
+    initPosition : vw.ol3.CameraPosition,
+};
+mapController = new vw.MapController(vw.MapControllerOption);
+mapController.setMode( "2d-map" );
+
+var map = mapController.Map2D;
+
+// 글로벌 변수 
+var sourceGaro, layerGaro;
+var sourceSinsok, layerSinsok;
+var overlay; // 오버레이 팝업 전역 변수
+
+// WFS 선택된 피처 하이라이트 스타일
+var vectorStyle = new ol.style.Style({
+    stroke: new ol.style.Stroke({ color: '#ff33aa', width: 3 }),
+    fill: new ol.style.Fill({ color: 'rgba(255, 51, 170, 0.15)' })
+});
+
+//=========================
+// 💡 오버레이 팝업 초기화 함수
+//=========================
+function initOverlayPopup() {
+    let container = document.getElementById('popup');
+    let closer = document.getElementById('popup-closer');
+
+    overlay = new ol.Overlay({
+        element: container,
+        autoPan: true,
+        autoPanAnimation: { duration: 250 }
+    });
+    map.addOverlay(overlay);
+
+    closer.onclick = function() {
+        overlay.setPosition(undefined);
+        closer.blur();
+        return false;
+    };
+}
+
+//=========================
+// 벡터 레이어 세팅 및 데이터 주입 통합
+//=========================
+function initVectorLayers() {
+    sourceGaro = new ol.source.Vector();
+    layerGaro = new ol.layer.Vector({
+        source: sourceGaro,
+        style: new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: "#ff0000", width: 3 }),
+            fill: new ol.style.Fill({ color: "rgba(255, 0, 0, 0.2)" })
+        }),
+        visible: document.getElementById('chk-garo').checked
+    });
+
+    sourceSinsok = new ol.source.Vector();
+    layerSinsok = new ol.layer.Vector({
+        source: sourceSinsok,
+        style: new ol.style.Style({
+            stroke: new ol.style.Stroke({ color: "#0055ff", width: 3 }),
+            fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" })
+        }),
+        visible: document.getElementById('chk-sinsok').checked
+    });
+
+    map.addLayer(layerGaro);
+    map.addLayer(layerSinsok);
+
+    loadPolygonData();
+}
+
+function loadPolygonData() {
+    // [데이터 A] 가로주택 2구역
+    const coordsGaroLonLat = [
+        [127.01975725809315,37.576627466724986], [127.01980568296834,37.5765141584602],
+        [127.01978031755753,37.576325920155355], [127.01992559218306,37.57567896157653],
+        [127.01931912827014,37.57561316886381], [127.01909083957284,37.57560220340599],
+        [127.01888791628637,37.57560220340599], [127.01885563303625,37.57582151225466],
+        [127.0189201995365,37.57604630315417],  [127.01933988178804,37.576340540623264],
+        [127.01939061260966,37.57644288381823], [127.01960045373544,37.576576295271906],
+        [127.0197042213251,37.5766292942762],   [127.01975725809315,37.576627466724986]
+    ];
+    const coordsGaro3857 = coordsGaroLonLat.map(coord => ol.proj.fromLonLat(coord));
+    const polyGaro = new ol.geom.Polygon([coordsGaro3857]);
+    sourceGaro.addFeature(new ol.Feature({ geometry: polyGaro, name: '가로주택2구역' }));
+
+    // [데이터 B] 신속통합요청 전체 정비구역
+    const coordsSinsok = [
+        [ 127.01935598174003, 37.57431377647724 ], [ 127.01929160872369, 37.574432822295634 ],
+        [ 127.01895901480589, 37.574466835351664 ], [ 127.01899120131407, 37.57465390688204 ],
+        [ 127.0191467694369,  37.57474319085587 ], [ 127.01909848967462, 37.57521937024176 ],
+        [ 127.01895901480589, 37.57535116935516 ], [ 127.01885172644525, 37.5757678230826 ],
+        [ 127.01859314332256, 37.57573773792715 ], [ 127.01850709089783, 37.57617422094965 ],
+        [ 127.01858886996178, 37.57726860749236 ], [ 127.01902504967556, 37.57799962354621 ],
+        [ 127.02014516729398, 37.57841100482445 ], [ 127.02029087365085, 37.57816561977413 ],
+        [ 127.02031819359276, 37.57667885776445 ], [ 127.02086459243103, 37.57547354832799 ],
+        [ 127.01979000804914, 37.57497554052983 ], [ 127.01999946093714, 37.57452083484892 ],
+        [ 127.01935598174003, 37.57431377647724 ]
+    ];
+    const coordsSinsok4326 = coordsSinsok.map(coord => ol.proj.fromLonLat(coord));
+    const polySinsok = new ol.geom.Polygon([coordsSinsok4326]);
+    sourceSinsok.addFeature(new ol.Feature({ geometry: polySinsok, name: '신속통합요청' }));
+}
+
+// 최초 빌드
+initVectorLayers();
+initOverlayPopup();
+
+
+//=========================
+// WMS 레이어 동적 관리 설정
+//=========================
+const wmsLayerList = [
+    { id: "lt_c_landinfobasemap", title: "지적도 기본", style: "lt_c_landinfobasemap" },
+    { id: "lt_c_bldginfo", title: "건물정보", style: "lt_c_bldginfo" }
+];
+
+const wmsLayerInstances = {};
+
+function initWmsLayers() {
+    let code = map.getView().getProjection().getCode();
+    
+    wmsLayerList.forEach(function(item) {
+        let this_val = item.id;
+        let this_title = item.title;
+        let this_style = item.style;
+
+        if ($(`#chk-${this_val}`).length === 0) {
+            let wmsHtml = `
+                <div class="wms-control-item">
+                    <label class="layer-item">
+                        <input type="checkbox" id="chk-${this_val}">
+                        <span>${this_title}</span>
+                    </label>
+                    <div class="legend-box" id="legend-${this_val}"></div>
+                </div>
+            `;
+            $('#wms-layer-section').append(wmsHtml);
+
+            let imgSrc = "https://api.vworld.kr/req/image?key=CEB52025-E065-364C-9DBA-44880E3B02B8&service=image&request=GetLegendGraphic&format=png&type=ALL&layer="+this_val+"&style="+this_style;
+            $(`#legend-${this_val}`).html(`<img src="${imgSrc}" alt="${this_title}의 범례이미지">`);
+
+            $(`#chk-${this_val}`).on('change', function(e) {
+                let isChecked = e.target.checked;
+                if(wmsLayerInstances[this_val]) {
+                    wmsLayerInstances[this_val].setVisible(isChecked);
+                }
+                if(isChecked) { $(`#legend-${this_val}`).slideDown(200); } 
+                else { $(`#legend-${this_val}`).slideUp(200); }
+            });
+        }
+
+        let isCurrentlyChecked = $(`#chk-${this_val}`).is(':checked');
+        
+        let layer_tile = new ol.layer.Tile({
+            title: this_title,
+            id: this_val,
+            name: "wms_theme", 
+            projection: code,
+            extent: map.getView().getProjection().getExtent(),
+            minZoom: 0, maxZoom: 22, tilePixelRatio: 1, tileSize: [512, 512],
+            visible: isCurrentlyChecked, 
+            source: new ol.source.TileWMS({
+                url: "https://api.vworld.kr/req/wms?",
+                params: {
+                    LAYERS: this_val.replace("_INFO","").toLowerCase(),
+                    STYLES: this_style,
+                    CRS: code,
+                    apikey: "CEB52025-E065-364C-9DBA-44880E3B02B8",
+                    DOMAIN: "http://localhost:8080",
+                    title: this_title,
+                    FORMAT: "image/png", WIDTH: 512, HEIGHT: 512
+                }
+            })
+        });
+        layer_tile.setZIndex(5);
+        map.addLayer(layer_tile);
+        
+        wmsLayerInstances[this_val] = layer_tile; 
+    });
+}
+initWmsLayers();
+
+
+//=========================
+// 체크박스 제어권 관리
+//=========================
+function bindCheckboxEvents() {
+    const chkGaro = document.getElementById('chk-garo');
+    const chkSinsok = document.getElementById('chk-sinsok');
+
+    chkGaro.replaceWith(chkGaro.cloneNode(true));
+    chkSinsok.replaceWith(chkSinsok.cloneNode(true));
+
+    document.getElementById('chk-garo').addEventListener('change', function(e) {
+        if(layerGaro) layerGaro.setVisible(e.target.checked);
+    });
+    document.getElementById('chk-sinsok').addEventListener('change', function(e) {
+        if(layerSinsok) layerSinsok.setVisible(e.target.checked);
+    });
+}
+bindCheckboxEvents();
+
+
+//=========================
+// 🚀 💡 통합된 지도 클릭 & WFS 호출 기능 추가
+//=========================
+function bindMapClickWFS() {
+    // 기존에 바인딩된 맵 클릭 리스너 오버랩 방지를 위해 리셋 대신 단일 바인딩 구성
+    map.un('singleclick', handleMapClick); 
+    map.on('singleclick', handleMapClick);
+}
+
+function handleMapClick(evt) {
+    let coordinate = evt.coordinate;
+    let projectionCode = map.getView().getProjection().getCode();
+    
+    // 클릭 오차 보정을 위한 BBOX 가공 (반경 0.5m 경계상자 생성)
+    let buffer = 0.5; 
+    let bbox = [
+        coordinate[0] - buffer,
+        coordinate[1] - buffer,
+        coordinate[0] + buffer,
+        coordinate[1] + buffer
+    ].join(',');
+
+    // ✨ 핵심: 체크박스에 체크된 주제도들을 순회하며 활성화된 레이어를 TYPENAME으로 추출
+    let targetLayerId = "";
+    wmsLayerList.forEach(function(item) {
+        if ($(`#chk-${item.id}`).is(':checked')) {
+            targetLayerId = item.id; // 여러 개 켜져 있을 시 마지막 루프 레이어 타겟팅
+        }
+    });
+
+    // 만약 체크박스에 선택된 WMS/WFS 대상 주제도가 있다면 조회를 시작합니다.
+    if(targetLayerId !== "") {
+        $('#wfs-typename').val(targetLayerId);
+        callWFS(bbox, projectionCode, coordinate);
+    } else {
+        // 켜져 있는 주제도가 없으면 오버레이창 닫기
+        if(overlay) overlay.setPosition(undefined);
+    }
+}
+
+// 펑션 맵핑 (작성해주신 구조 상속 고도화)
+var callWFS = function(box, code, clickCoordinate){
+    
+    $('#wfsForm > [name=BBOX]').val(box);        
+    $('#wfsForm > [name=SRSNAME]').val(code);
+    
+    $.ajax({
+        type: "get",
+        url: "https://api.vworld.kr/req/wfs",
+        data : $('#wfsForm').serialize(),
+        dataType: 'jsonp',
+        async: false,
+        jsonpCallback:"parseResponse",
+        success: function(data) {
+            
+            let vectorSource = new ol.source.Vector({
+                features: (new ol.format.GeoJSON()).readFeatures(data)
+            });
+            
+            // 기존 WFS 하이라이트 결과 레이어 삭제
+            map.getLayers().forEach(function(ollayer){
+                if(ollayer && ollayer.get("name") == "wfs_result"){
+                    map.removeLayer(ollayer);
+                }
+            });
+            
+            let vector_layer = new ol.layer.Vector({
+                source: vectorSource,
+                style: vectorStyle
+            });
+            
+            vector_layer.set("name", "wfs_result");
+            map.addLayer(vector_layer);
+            
+            let resultFeature = vectorSource.getFeatures()[0];
+            if(typeof resultFeature == "object"){
+                
+                // ✨ <ul> 리스트에서 <table> 표 양식 구조로 데이터 렌더링 변경
+                let wfs_html = `<h4 style="margin:0 0 6px 0; color:#2563eb;">WFS 속성 정보</h4>`;
+                wfs_html += `<table class="wfs-table"><tbody>`;
+                
+                let keys = resultFeature.getKeys();
+                for(let i in keys){ 
+                    let key = keys[i];
+                    if(key === 'geometry' || key === 'BoundedBy') continue; // 불필요한 지오메트리 텍스트 노출 제외
+                    
+                    let val = resultFeature.get(key) || '-';
+                    wfs_html += `<tr><th>${key}</th><td>${val}</td></tr>`;
+                }
+                wfs_html += `</tbody></table>`;
+                
+                // 표 정보�� 오버레이 팝업 컨텐츠에 주입 후 클릭 좌표에 오픈
+                document.getElementById('popup-content').innerHTML = wfs_html;
+                overlay.setPosition(clickCoordinate);
+            } else {
+                if(overlay) overlay.setPosition(undefined);
+            }
+        },
+        error: function(xhr, stat, err) {
+            console.error("WFS 조회 오류 발생:", err);
+        }
+    });
+};
+
+// 최초 1회 클릭 이벤트 실행
+bindMapClickWFS();
+
+
+//=========================
+// 💡 2D / 3D 지도 전환 통합 제어
+//=========================
+document.getElementById('map-mode-selector').addEventListener('change', function(e) {
+    let targetMode = e.target.value;
+    
+    mapController.setMode(targetMode);
+    
+    if (targetMode === "2d-map") {
+        map = mapController.Map2D;
+        
+        initVectorLayers();     // 벡터 레이어 및 데이터 재생성
+        initWmsLayers();        // WMS 주제도 재생성
+        bindCheckboxEvents();   // 체크박스 리스너 리바인딩
+        initOverlayPopup();     // ✨ 2D 복귀 시 오버레이 팝업 인스턴스 맵에 재연결
+        bindMapClickWFS();      // ✨ 2D 복귀 시 맵 클릭 리스너 재부착
+        
+        focusToLayers();
+    } else {
+        // 3D 지도 모드일 때는 오버레이 창 숨김 처리
+        if(overlay) overlay.setPosition(undefined);
+    }
+});
+
+// 두 구역 범위 맞춤 포커싱
+function focusToLayers() {
+    if(sourceGaro && sourceSinsok) {
+        const totalExtent = ol.extent.createEmpty();
+        ol.extent.extend(totalExtent, sourceGaro.getExtent());
+        ol.extent.extend(totalExtent, sourceSinsok.getExtent());
+
+        map.getView().fit(totalExtent, {
+            padding: [60, 60, 60, 60],
+            duration: 1000
+        });
+    }
+}
+focusToLayers();
+
+</script>
+</body>
+</html>
