@@ -34,7 +34,7 @@ html, body {
     font-size: 14px;
     max-height: 80vh;
     overflow-y: auto;
-    width: 200px;
+    width: 210px;
 }
 
 .layer-section {
@@ -82,6 +82,7 @@ html, body {
     background: #fff;
 }
 
+/* 🗺 지도 모드 선택기 스타일 */
 .map-mode-select {
     width: 100%;
     padding: 6px 8px;
@@ -103,8 +104,16 @@ html, body {
     <div class="layer-section">
         <div class="layer-section-title">기본 구역</div>
         <label class="layer-item">
-            <input type="checkbox" id="chk-garo" checked>
+            <input type="checkbox" id="chk-garo1" checked>
+            <span>가로주택 1구역 (주황)</span>
+        </label>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-garo2" checked>
             <span>가로주택 2구역 (적색)</span>
+        </label>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-garo3" checked>
+            <span>가로주택 3구역 (보라)</span>
         </label>
         <label class="layer-item">
             <input type="checkbox" id="chk-sinsok" checked>
@@ -145,98 +154,162 @@ mapController.setMode( "2d-map" );
 
 var map = mapController.Map2D;
 
-// 글로벌 레이어 변수 선언
-var sourceGaro, layerGaro;
+// ✨ 수정: 각 구역의 개별 소스 및 레이어 변수 정의
+var sourceGaro1, layerGaro1;
+var sourceGaro2, layerGaro2;
+var sourceGaro3, layerGaro3;
 var sourceSinsok, layerSinsok;
 
 //=========================
-// 💡 벡터 레이어 초기화 및 데이터 로드 통합 함수
+// 레이어 설정 및 색상 분리
 //=========================
+
+// 가로주택 1구역: 주황색(Orange)
+sourceGaro1 = new ol.source.Vector();
+layerGaro1 = new ol.layer.Vector({
+    source: sourceGaro1,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#ff8c00", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(255, 140, 0, 0.2)" }),
+        text: new ol.style.Text({
+            text: "가로주택 1구역\n(신통기획 찬성)",
+            font: "14px sans-serif",
+            fill: new ol.style.Fill({ color: "#000" }),
+            stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+            overflow: true,
+            placement: "point",
+            textAlign: "center",
+            textBaseline: "middle"
+        })
+    })
+});
+
+// 가로주택 2구역: 적색(Red)
+sourceGaro2 = new ol.source.Vector();
+layerGaro2 = new ol.layer.Vector({
+    source: sourceGaro2,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#ff0000", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(255, 0, 0, 0.2)" }),
+        text: new ol.style.Text({
+            text: "[가로 2구역]\n  (핵심 문제 지역)\n 주민 선출 없이 등록 후 \n독단적 사임 거부 중",
+            font: "14px sans-serif",
+            fill: new ol.style.Fill({ color: "#000" }),
+            stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+            overflow: true,
+            placement: "point",
+            textAlign: "center",
+            textBaseline: "middle"
+        })
+    })
+});
+
+// 가로주택 3구역: 보라색(Purple)
+sourceGaro3 = new ol.source.Vector();
+layerGaro3 = new ol.layer.Vector({
+    source: sourceGaro3,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#9400d3", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(148, 0, 211, 0.2)" }),
+        text: new ol.style.Text({
+            text: "가로주택 3구역\n추진 자격 상실\n 및 사업 무산",
+            font: "14px sans-sserif",
+            fill: new ol.style.Fill({ color: "#000" }),
+            stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+            overflow: true,
+            placement: "point",
+            textAlign: "center",
+            textBaseline: "middle"
+        })
+    })
+});
+
+// 신속통합요청: 청색(Blue)
+sourceSinsok = new ol.source.Vector();
+layerSinsok = new ol.layer.Vector({
+    source: sourceSinsok,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#0055ff", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" })
+    })
+});
+
+// 초기 레이어 주입 함수
 function initVectorLayers() {
-    // 1. 가로주택 2구역 레이어 재생성
-    sourceGaro = new ol.source.Vector();
-    layerGaro = new ol.layer.Vector({
-        source: sourceGaro,
-        style: new ol.style.Style({
-            stroke: new ol.style.Stroke({ color: "#ff0000", width: 3 }),
-            fill: new ol.style.Fill({ color: "rgba(255, 0, 0, 0.2)" })
-        }),
-        visible: document.getElementById('chk-garo').checked // ✨ 현재 체크박스 상태 강제 동기화
-    });
-
-    // 2. 신속통합요청 레이어 재생성
-    sourceSinsok = new ol.source.Vector();
-    layerSinsok = new ol.layer.Vector({
-        source: sourceSinsok,
-        style: new ol.style.Style({
-            stroke: new ol.style.Stroke({ color: "#0055ff", width: 3 }),
-            fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" })
-        }),
-        visible: document.getElementById('chk-sinsok').checked // ✨ 현재 체크박스 상태 강제 동기화
-    });
-
-    // 지도에 추가
-    map.addLayer(layerGaro);
+    map.addLayer(layerGaro1);
+    map.addLayer(layerGaro2);
+    map.addLayer(layerGaro3);
     map.addLayer(layerSinsok);
-
-    // ✨ 레이어가 새롭게 깔렸으므로 Polygon 데이터들도 다시 주입해줍니다.
-    loadPolygonData();
 }
-
-//=========================
-// 💡 데이터 주입 전용 함수
-//=========================
-function loadPolygonData() {
-    // [데이터 A] 가로주택 2구역
-    const coordsGaroLonLat = [
-        [127.01975725809315,37.576627466724986], [127.01980568296834,37.5765141584602],
-        [127.01978031755753,37.576325920155355], [127.01992559218306,37.57567896157653],
-        [127.01931912827014,37.57561316886381], [127.01909083957284,37.57560220340599],
-        [127.01888791628637,37.57560220340599], [127.01885563303625,37.57582151225466],
-        [127.0189201995365,37.57604630315417],  [127.01933988178804,37.576340540623264],
-        [127.01939061260966,37.57644288381823], [127.01960045373544,37.576576295271906],
-        [127.0197042213251,37.5766292942762],   [127.01975725809315,37.576627466724986]
-    ];
-
-    const coordsGaro3857 = coordsGaroLonLat.map(function(coord) {
-        return ol.proj.fromLonLat(coord);
-    });
-
-    const polyGaro = new ol.geom.Polygon([coordsGaro3857]);
-    const featureGaro = new ol.Feature({
-        geometry: polyGaro,
-        name: '가로주택2구역'
-    });
-    sourceGaro.addFeature(featureGaro);
-
-    // [데이터 B] 신속통합요청 전체 정비구역
-    const coordsSinsok = [
-        [ 127.01935598174003, 37.57431377647724 ], [ 127.01929160872369, 37.574432822295634 ],
-        [ 127.01895901480589, 37.574466835351664 ], [ 127.01899120131407, 37.57465390688204 ],
-        [ 127.0191467694369,  37.57474319085587 ], [ 127.01909848967462, 37.57521937024176 ],
-        [ 127.01895901480589, 37.57535116935516 ], [ 127.01885172644525, 37.5757678230826 ],
-        [ 127.01859314332256, 37.57573773792715 ], [ 127.01850709089783, 37.57617422094965 ],
-        [ 127.01858886996178, 37.57726860749236 ], [ 127.01902504967556, 37.57799962354621 ],
-        [ 127.02014516729398, 37.57841100482445 ], [ 127.02029087365085, 37.57816561977413 ],
-        [ 127.02031819359276, 37.57667885776445 ], [ 127.02086459243103, 37.57547354832799 ],
-        [ 127.01979000804914, 37.57497554052983 ], [ 127.01999946093714, 37.57452083484892 ],
-        [ 127.01935598174003, 37.57431377647724 ]
-    ];
-
-    const coordsSinsok4326 = coordsSinsok.map(function(coord) {
-        return ol.proj.fromLonLat(coord);
-    });
-
-    const polySinsok = new ol.geom.Polygon([coordsSinsok4326]);
-    const featureSinsok = new ol.Feature({
-        geometry: polySinsok,
-        name: '신속통합요청'
-    });
-    sourceSinsok.addFeature(featureSinsok);
-}
-
-// 최초 1회 전체 실행
 initVectorLayers();
+
+
+//=========================
+// Polygon 직접 생성 및 데이터 매핑
+//=========================
+
+// [데이터] 가로주택 1구역
+const coordsGaro1LonLat = [
+    [127.01977574647704,37.57662334245326],[127.0197988059414,37.57649175863847],
+    [127.01978497026276,37.57634555412713],[127.01993255083477,37.575713216309964],
+    [127.01978958215564,37.57499680397133],[127.02084109373097,37.57545735555168],
+    [127.02031533794329,37.57664892816801], 
+    [127.01989565569174,37.576696444472105],[127.01977574647704,37.57662334245326]
+];
+const coordsGaro13857 = coordsGaro1LonLat.map(function(coord) { return ol.proj.fromLonLat(coord); });
+const polyGaro1 = new ol.geom.Polygon([coordsGaro13857]);
+const featureGaro1 = new ol.Feature({ geometry: polyGaro1, name: '가로주택1구역' });
+sourceGaro1.addFeature(featureGaro1);
+
+
+// [데이터] 가로주택 2구역
+const coordsGaro2LonLat = [
+    [127.01975725809315,37.576627466724986], [127.01980568296834,37.5765141584602],
+    [127.01978031755753,37.576325920155355], [127.01992559218306,37.57567896157653],
+    [127.01931912827014,37.57561316886381], [127.01909083957284,37.57560220340599],
+    [127.01888791628637,37.57560220340599], [127.01885563303625,37.57582151225466],
+    [127.0189201995365,37.57604630315417],  [127.01933988178804,37.576340540623264],
+    [127.01939061260966,37.57644288381823], [127.01960045373544,37.576576295271906],
+    [127.0197042213251,37.5766292942762],   [127.01975725809315,37.576627466724986]
+];
+const coordsGaro23857 = coordsGaro2LonLat.map(function(coord) { return ol.proj.fromLonLat(coord); });
+const polyGaro2 = new ol.geom.Polygon([coordsGaro23857]);
+const featureGaro2 = new ol.Feature({ geometry: polyGaro2, name: '가로주택2구역' });
+sourceGaro2.addFeature(featureGaro2);
+
+
+// [데이터] 가로주택 3구역
+const coordsGaro3LonLat = [
+    [127.01956191190754,37.574938218817806],[127.01916029243276,37.57490790394439],
+    [127.01911630553788,37.575148906846934],[127.01907614359041,37.57524136687296],
+    [127.01895948269534,37.575323216636264],[127.01888680869513,37.57560665863991],
+    [127.01910100574838,37.575612721558684],[127.01936683959126,37.575617268747465],
+    [127.01959251148661,37.57564606760312],[127.01956191190754,37.574938218817806]
+];
+const coordsGaro33857 = coordsGaro3LonLat.map(function(coord) { return ol.proj.fromLonLat(coord); });
+const polyGaro3 = new ol.geom.Polygon([coordsGaro33857]);
+const featureGaro3 = new ol.Feature({ geometry: polyGaro3, name: '가로주택3구역' });
+sourceGaro3.addFeature(featureGaro3);
+
+
+// [데이터 B] 신속통합요청 전체 정비구역
+const coordsSinsok = [
+  [ 127.01935598174003, 37.57431377647724 ], [ 127.01929160872369, 37.574432822295634 ],
+  [ 127.01895901480589, 37.574466835351664 ], [ 127.01899120131407, 37.57465390688204 ],
+  [ 127.0191467694369,  37.57474319085587 ], [ 127.01909848967462, 37.57521937024176 ],
+  [ 127.01895901480589, 37.57535116935516 ], [ 127.01885172644525, 37.5757678230826 ],
+  [ 127.01859314332256, 37.57573773792715 ], [ 127.01850709089783, 37.57617422094965 ],
+  [ 127.01858886996178, 37.57726860749236 ], [ 127.01902504967556, 37.57799962354621 ],
+  [ 127.02014516729398, 37.57841100482445 ], [ 127.02029087365085, 37.57816561977413 ],
+  [ 127.02031819359276, 37.57667885776445 ], [ 127.02086459243103, 37.57547354832799 ],
+  [ 127.01979000804914, 37.57497554052983 ], [ 127.01999946093714, 37.57452083484892 ],
+  [ 127.01935598174003, 37.57431377647724 ]
+];
+const coordsSinsok4326 = coordsSinsok.map(function(coord) { return ol.proj.fromLonLat(coord); });
+const polySinsok = new ol.geom.Polygon([coordsSinsok4326]);
+const featureSinsok = new ol.Feature({ geometry: polySinsok, name: '신속통합요청' });
+sourceSinsok.addFeature(featureSinsok);
+
 
 
 //=========================
@@ -319,20 +392,29 @@ function initWmsLayers() {
 initWmsLayers();
 
 //=========================
-// 이벤트 바인딩 함수화
+// ✨ 수정: 각 구역 체크박스에 대한 이벤트 리스너 분리 및 복제바인딩
 //=========================
 function bindCheckboxEvents() {
-    const chkGaro = document.getElementById('chk-garo');
+    const chkGaro1 = document.getElementById('chk-garo1');
+    const chkGaro2 = document.getElementById('chk-garo2');
+    const chkGaro3 = document.getElementById('chk-garo3');
     const chkSinsok = document.getElementById('chk-sinsok');
 
-    // 이벤트 중복 축적 방지를 위해 엘리먼트 클론 생성 교체
-    chkGaro.replaceWith(chkGaro.cloneNode(true));
+    // 2D/3D 전환 시 무한 이벤트 방지를 위한 초기화 노드 치환
+    chkGaro1.replaceWith(chkGaro1.cloneNode(true));
+    chkGaro2.replaceWith(chkGaro2.cloneNode(true));
+    chkGaro3.replaceWith(chkGaro3.cloneNode(true));
     chkSinsok.replaceWith(chkSinsok.cloneNode(true));
 
-    document.getElementById('chk-garo').addEventListener('change', function(e) {
-        if(layerGaro) layerGaro.setVisible(e.target.checked);
+    document.getElementById('chk-garo1').addEventListener('change', function(e) {
+        if(layerGaro1) layerGaro1.setVisible(e.target.checked);
     });
-
+    document.getElementById('chk-garo2').addEventListener('change', function(e) {
+        if(layerGaro2) layerGaro2.setVisible(e.target.checked);
+    });
+    document.getElementById('chk-garo3').addEventListener('change', function(e) {
+        if(layerGaro3) layerGaro3.setVisible(e.target.checked);
+    });
     document.getElementById('chk-sinsok').addEventListener('change', function(e) {
         if(layerSinsok) layerSinsok.setVisible(e.target.checked);
     });
@@ -341,7 +423,7 @@ bindCheckboxEvents();
 
 
 //=========================
-// 💡 2D / 3D 지도 전환 핵심 로직 수정
+// 💡 2D / 3D 지도 전환 (Select 컨트롤러 기능)
 //=========================
 document.getElementById('map-mode-selector').addEventListener('change', function(e) {
     let targetMode = e.target.value;
@@ -351,33 +433,26 @@ document.getElementById('map-mode-selector').addEventListener('change', function
     if (targetMode === "2d-map") {
         map = mapController.Map2D;
         
-        // 중요 순서: 레이어 생성(+데이터 로드) -> 주제도 연결 -> 체크박스 제어권 갱신
         initVectorLayers();     
         initWmsLayers();        
         bindCheckboxEvents();   
-        
-        // 2D 복귀 시 화면 앵글 재조정
-        focusToLayers();
     }
 });
 
 
 //=========================
-// 두 구역 자동 포커싱 함수화
+// 모든 구역이 다 보이도록 영역 계산 및 포커싱
 //=========================
-function focusToLayers() {
-    if (sourceGaro && sourceSinsok) {
-        const totalExtent = ol.extent.createEmpty();
-        ol.extent.extend(totalExtent, sourceGaro.getExtent());
-        ol.extent.extend(totalExtent, sourceSinsok.getExtent());
+const totalExtent = ol.extent.createEmpty();
+ol.extent.extend(totalExtent, sourceGaro1.getExtent());
+ol.extent.extend(totalExtent, sourceGaro2.getExtent());
+ol.extent.extend(totalExtent, sourceGaro3.getExtent());
+ol.extent.extend(totalExtent, sourceSinsok.getExtent());
 
-        map.getView().fit(totalExtent, {
-            padding: [60, 60, 60, 60],
-            duration: 1000
-        });
-    }
-}
-focusToLayers(); // 초기 실행
+map.getView().fit(totalExtent, {
+    padding: [60, 60, 60, 60],
+    duration: 1000
+});
 
 </script>
 </body>
