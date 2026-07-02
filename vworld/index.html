@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>MOBILE WebGL VER 3.0</title>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=CEB52025-E065-364C-9DBA-44880E3B02B8"></script>
+
+<style>
+html, body {
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow: hidden;
+}
+
+#vmap{
+    width:100%;
+    height:100%;
+}
+
+/* 반응형 레이어 컨트롤러 스타일 */
+.layer-control {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.layer-section {
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+}
+.layer-section:not(:last-child) {
+    border-bottom: 1px solid #eee;
+}
+.layer-section-title {
+    font-weight: bold;
+    margin-bottom: 6px;
+    color: #555;
+    font-size: 12px;
+}
+
+.layer-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.layer-item:last-child {
+    margin-bottom: 0;
+}
+
+.layer-item input {
+    margin-right: 8px;
+    width: 18px;
+    height: 18px;
+    accent-color: #2563eb;
+    cursor: pointer;
+}
+
+/* 범례 레이아웃 스타일 */
+.legend-box {
+    margin-top: 4px;
+    margin-left: 26px;
+    display: none;
+}
+.legend-box img {
+    max-width: 150px;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="vmap"></div>
+
+<div class="layer-control">
+    <div class="layer-section">
+        <div class="layer-section-title">기본 구역</div>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-garo" checked>
+            <span>가로주택 2구역 (적색)</span>
+        </label>
+        <label class="layer-item">
+            <input type="checkbox" id="chk-sinsok" checked>
+            <span>신속통합요청 (청색)</span>
+        </label>
+    </div>
+    
+    <div class="layer-section" id="wms-layer-section">
+        <div class="layer-section-title">WMS 주제도</div>
+        </div>
+</div>
+
+<script>
+
+//=========================
+// VWorld Map 생성
+//=========================
+vw.MapControllerOption = {
+    container : "vmap",
+    mapMode : "2d-map",
+    basemapType : vw.ol3.BasemapType.GRAPHIC,
+    controlDensity : vw.ol3.DensityType.BASIC,
+    interactionDensity : vw.ol3.DensityType.BASIC,
+    controlsAutoArrange : true,
+    homePosition : vw.ol3.CameraPosition,
+    initPosition : vw.ol3.CameraPosition,
+};
+mapController = new vw.MapController(vw.MapControllerOption);
+mapController.setMode( "2d-map" );
+
+var map = mapController.Map2D;
+
+//=========================
+// 1. 가로주택 2구역 레이어 설정
+//=========================
+const sourceGaro = new ol.source.Vector();
+const layerGaro = new ol.layer.Vector({
+    source: sourceGaro,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#ff0000", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(255, 0, 0, 0.2)" })
+    })
+});
+map.addLayer(layerGaro);
+
+//=========================
+// 2. 신속통합요청 레이어 설정 (청색계열)
+//=========================
+const sourceSinsok = new ol.source.Vector();
+const layerSinsok = new ol.layer.Vector({
+    source: sourceSinsok,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#0055ff", width: 3 }),
+        fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" })
+    })
+});
+map.addLayer(layerSinsok);
+
+
+//=========================
+// Polygon 직접 생성 및 변환
+//=========================
+
+// [데이터 A] 가로주택 2구역
+const coordsGaroLonLat = [
+    [127.01975725809315,37.576627466724986], [127.01980568296834,37.5765141584602],
+    [127.01978031755753,37.576325920155355], [127.01992559218306,37.57567896157653],
+    [127.01931912827014,37.57561316886381], [127.01909083957284,37.57560220340599],
+    [127.01888791628637,37.57560220340599], [127.01885563303625,37.57582151225466],
+    [127.0189201995365,37.57604630315417],  [127.01933988178804,37.576340540623264],
+    [127.01939061260966,37.57644288381823], [127.01960045373544,37.576576295271906],
+    [127.0197042213251,37.5766292942762],   [127.01975725809315,37.576627466724986]
+];
+
+const coordsGaro3857 = coordsGaroLonLat.map(function(coord) {
+    return ol.proj.fromLonLat(coord);
+});
+
+const polyGaro = new ol.geom.Polygon([coordsGaro3857]);
+const featureGaro = new ol.Feature({
+    geometry: polyGaro,
+    name: '가로주택2구역'
+});
+sourceGaro.addFeature(featureGaro);
+
+
+// [데이터 B] 신속통합요청 전체 정비구역
+const coordsSinsok3857 = [
+    [ 14139730.028776850551367, 4519463.936790434643626 ], [ 14139722.862805450335145, 4519480.657390372827649 ], 
+    [ 14139685.838619876652956, 4519485.43470464181155 ], [ 14139689.421605577692389, 4519511.709933113306761 ], 
+    [ 14139706.739369796589017, 4519524.250383066013455 ], [ 14139701.364891242235899, 4519591.132782817818224 ], 
+    [ 14139685.838619876652956, 4519609.644875603727996 ], [ 14139673.895334202796221, 4519668.166975389234722 ], 
+    [ 14139645.10999265871942,  4519663.941281669773161 ], [ 14139635.530680553987622, 4519725.248879135586321 ], 
+    [ 14139644.634284311905503, 4519878.965967452153563 ], [ 14139693.189587945118546, 4519981.645443385466933 ], 
+    [ 14139817.880510855466127, 4520039.429041808471084 ], [ 14139834.100468307733536, 4520004.961632224731147 ], 
+    [ 14139837.141710329800844, 4519796.129680036567152 ], [ 14139897.966550774872303, 4519626.833874134346843 ], 
+    [ 14139778.344364568591118, 4519556.885307623073459 ], [ 14139801.660553405061364, 4519493.019225157797337 ], 
+    [ 14139730.028776850551367, 4519463.936790434643626 ] 
+];
+
+const polySinsok = new ol.geom.Polygon([coordsSinsok3857]);
+const featureSinsok = new ol.Feature({
+    geometry: polySinsok,
+    name: '신속통합요청'
+});
+sourceSinsok.addFeature(featureSinsok);
+
+
+//=========================
+// [확장성 구현] WMS 레이어 동적 관리 설정
+//=========================
+// 향후 레이어가 추가되면 이 배열에 객체 정보만 추가하면 됩니다.
+const wmsLayerList = [
+    {
+        id: "lp_pa_cbnd_bubun",
+        title: "지적도 기본",
+        style: "lp_pa_cbnd_bubun" // 필요에 맞는 스타일명 지정
+    },
+    {
+        id: "lt_c_bldginfo",
+        title: "건물정보",
+        style: "lt_c_bldginfo" // 필요에 맞는 스타일명 지정
+    }
+    // { id: "추가될_레이어_ID", title: "추가 레이어 명", style: "스타일" } <-- 이런 식으로 확장 가능
+];
+
+// WMS 레이어 생성 및 UI 바인딩 공통 루프
+wmsLayerList.forEach(function(item) {
+    let this_val = item.id;
+    let this_title = item.title;
+    let this_style = item.style;
+    let code = map.getView().getProjection().getCode(); // 기존 소스의 'code' 자동 추출
+
+    // 1. OpenLayers TileWMS 레이어 객체 생성
+    let layer_tile = new ol.layer.Tile({
+        title: this_title,
+        id: this_val,
+        name: "wms_theme", 
+        projection: code,
+        extent: map.getView().getProjection().getExtent(),
+        maxZoom: 22,
+        minZoom: 10,
+        tilePixelRatio: 1,
+        tileSize: [512, 512],
+        visible: false, // 요구사항: 기본값 미체크(숨김)
+        source: new ol.source.TileWMS({
+            url: "https://api.vworld.kr/req/wms?",
+            params: {
+                LAYERS: this_val.replace("_INFO","").toLowerCase(),
+                STYLES: this_style,
+                CRS: code,
+                apikey: "CEB52025-E065-364C-9DBA-44880E3B02B8",
+                DOMAIN: "http://localhost:8080", // 오타 수정 (loacalhost -> localhost)
+                title: this_title,
+                FORMAT: "image/png",
+                WIDTH: 512,
+                HEIGHT: 512
+            }
+        })
+    });
+    layer_tile.setZIndex(5);
+    map.addLayer(layer_tile); // 생성된 레이어를 지도에 추가
+
+    // 2. 왼쪽 상단 레이어 패널에 UI 컴포넌트 동적 추가 (체크박스 + 범례 박스)
+    let wmsHtml = `
+        <div class="wms-control-item">
+            <label class="layer-item">
+                <input type="checkbox" id="chk-${this_val}">
+                <span>${this_title}</span>
+            </label>
+            <div class="legend-box" id="legend-${this_val}"></div>
+        </div>
+    `;
+    $('#wms-layer-section').append(wmsHtml);
+
+    // 3. 범례 이미지 URL 생성 및 주입
+    let imgSrc = "https://api.vworld.kr/req/image?key=CEB52025-E065-364C-9DBA-44880E3B02B8&service=image&request=GetLegendGraphic&format=png&type=ALL&layer="+this_val+"&style="+this_style;
+    $(`#legend-${this_val}`).html(`<img src="${imgSrc}" alt="${this_title}의 범례이미지">`);
+
+    // 4. 이벤트 바인딩 (체크박스 토글 시 레이어 On/Off 및 범례 보임/숨김 제어)
+    $(`#chk-${this_val}`).on('change', function(e) {
+        let isChecked = e.target.checked;
+        layer_tile.setVisible(isChecked); // 레이어 토글
+        
+        if(isChecked) {
+            $(`#legend-${this_val}`).slideDown(200); // 범례 노출
+        } else {
+            $(`#legend-${this_val}`).slideUp(200);   // 범례 숨김
+        }
+    });
+});
+
+
+//=========================
+// 기존 이벤트 바인딩 (기본 레이어 체크박스 토글)
+//=========================
+document.getElementById('chk-garo').addEventListener('change', function(e) {
+    layerGaro.setVisible(e.target.checked);
+});
+
+document.getElementById('chk-sinsok').addEventListener('change', function(e) {
+    layerSinsok.setVisible(e.target.checked);
+});
+
+
+//=========================
+// 두 구역이 다 보이도록 화면 이동
+//=========================
+const totalExtent = ol.extent.createEmpty();
+ol.extent.extend(totalExtent, sourceGaro.getExtent());
+ol.extent.extend(totalExtent, sourceSinsok.getExtent());
+
+map.getView().fit(totalExtent, {
+    padding: [60, 60, 60, 60],
+    duration: 1000
+});
+
+</script>
+</body>
+</html>
