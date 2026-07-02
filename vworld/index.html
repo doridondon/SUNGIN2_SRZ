@@ -212,8 +212,8 @@ layerGaro3 = new ol.layer.Vector({
         stroke: new ol.style.Stroke({ color: "#9400d3", width: 3 }),
         fill: new ol.style.Fill({ color: "rgba(148, 0, 211, 0.2)" }),
         text: new ol.style.Text({
-            text: "가로주택 3구역\n추진 자격 상실\n 및 사업 무산",
-            font: "14px sans-sserif",
+            text: "가로주택 3구역\n(주민 대표 주택 매도)\n추진 자격 상실\n 및 사업 무산",
+            font: "14px sans-serif",
             fill: new ol.style.Fill({ color: "#000" }),
             stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
             overflow: true,
@@ -230,7 +230,17 @@ layerSinsok = new ol.layer.Vector({
     source: sourceSinsok,
     style: new ol.style.Style({
         stroke: new ol.style.Stroke({ color: "#0055ff", width: 3 }),
-        fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" })
+        fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" }),
+        text: new ol.style.Text({
+            text: "쪼개진 가로주택 해제,\n 대규모 신속통합기획으로\n 하나의 대단지 통합 정비!",
+            font: "14px sans-serif",
+            fill: new ol.style.Fill({ color: "#000" }),
+            stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+            overflow: true,
+            placement: "point",
+            textAlign: "center",
+            textBaseline: "middle"
+        })
     })
 });
 
