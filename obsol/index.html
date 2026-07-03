@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>숭인2동 노후도 분석</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=CEB52025-E065-364C-9DBA-44880E3B02B8"></script>
+
+<style>
+html, body {
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+#map {
+    width:100%;
+    height:100%;
+}
+
+/* 🎛 범례 및 상태 패널 */
+.layer-control {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 20px;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    width: 270px;
+    box-sizing: border-box;
+}
+
+.layer-section-title {
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #1e293b;
+    font-size: 14px;
+    border-bottom: 2px solid #ff4500;
+    padding-bottom: 4px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.legend-color {
+    width: 24px;
+    height: 14px;
+    margin-right: 10px;
+    border: 1px solid #777;
+    border-radius: 2px;
+}
+
+#zoom_warning {
+    font-size: 11px;
+    font-weight: bold;
+    margin-top: 10px;
+    padding: 6px;
+    border-radius: 6px;
+    text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div class="layer-control">
+    <div class="layer-section-title">건축물 노후도 범례 (사용승인일)</div>
+    <div id="custom_legend">
+        <div class="legend-item"><div class="legend-color" style="background: rgba(255, 0, 0, 0.9);"></div>30년 이상 (노후)</div>
+        <div class="legend-item"><div class="legend-color" style="background: rgba(255, 215, 207, 0.9);"></div>20년 이상 30년 미만</div>
+        <div class="legend-item"><div class="legend-color" style="background: rgba(5, 122, 255, 0.9);"></div>10년 이상 20년 미만</div>
+        <div class="legend-item"><div class="legend-color" style="background: rgba(137, 175, 201, 0.5);"></div>10년 미만 (신축)</div>
+        <div class="legend-item"><div class="legend-color" style="background: rgba(204, 204, 204, 0.9);"></div>정보 없음 (기타)</div>
+    </div>
+</div>
+
+<div id="analysis-container" style="position: absolute; top: 150px; right: 20px; z-index: 1000; background: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 10px; width: 300px;">
+    <h5>분석 결과</h5>
+    <div id="stats"></div>
+    <div id="ageTable"></div>
+    <div id="floorTable"></div>
+    <div id="featureTable"></div>
+    <div id="targetUrl" style="display:none;"></div> </div>
+
+    <div id="popup" style="background: white; padding: 10px; border-radius: 8px; border: 1px solid #ccc; display: none; min-width: 200px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+        <div id="popup-content"></div>
+    </div>
+<script type="text/javascript">
+
+
+let newProj = ol.proj.get('EPSG:3857'); 
+let newProjExtent = newProj.getExtent(); 
+
+vw.MapControllerOption = {
+    container : "map",
+    mapMode : "2d-map",
+    basemapType : vw.ol3.BasemapType.GRAPHIC,
+    controlDensity : vw.ol3.DensityType.BASIC,
+    interactionDensity : vw.ol3.DensityType.BASIC,
+    controlsAutoArrange : true,
+    homePosition : vw.ol3.CameraPosition,
+    initPosition : vw.ol3.CameraPosition,
+};
+mapController = new vw.MapController(vw.MapControllerOption);
+
+var vmap = mapController.Map2D;
+vmap.getView().setCenter(ol.proj.transform([127.0195, 37.5763], 'EPSG:4326', 'EPSG:3857'))
+vmap.getView().setZoom(17)
+
+/* 1. 날짜 계산 (기존과 동일) */
+function getFormattedDate(date) {
+    return date.getFullYear().toString() + 
+           (date.getMonth() + 1).toString().padStart(2, '0') + 
+           date.getDate().toString().padStart(2, '0');
+}
+
+let today = new Date();
+let date30YearsAgo = new Date(); date30YearsAgo.setFullYear(today.getFullYear() - 30);
+let date20YearsAgo = new Date(); date20YearsAgo.setFullYear(today.getFullYear() - 20);
+let date10YearsAgo = new Date(); date10YearsAgo.setFullYear(today.getFullYear() - 10);
+
+const d30 = getFormattedDate(date30YearsAgo);
+const d20 = getFormattedDate(date20YearsAgo);
+const d10 = getFormattedDate(date10YearsAgo);
+
+
+/* 🗺️ 5. 신속통합정비구역 공간 벡터 레이어 렌더링 */
+let sourceSinsok = new ol.source.Vector();
+let layerSinsok = new ol.layer.Vector({
+    source: sourceSinsok,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#ff4500", width: 4 }), 
+        fill: new ol.style.Fill({ color: "rgba(255, 69, 0, 0.02)" }) 
+    })
+});
+layerSinsok.setZIndex(10); 
+vmap.addLayer(layerSinsok);
+
+const coordsSinsok = [
+  [ 127.01935598174003, 37.57431377647724 ], [ 127.01929160872369, 37.574432822295634 ],
+  [ 127.01895901480589, 37.574466835351664 ], [ 127.01899120131407, 37.57465390688204 ],
+  [ 127.0191467694369,  37.57474319085587 ], [ 127.01909848967462, 37.57521937024176 ],
+  [ 127.01895901480589, 37.57535116935516 ], [ 127.01885172644525, 37.5757678230826 ],
+  [ 127.01859314332256, 37.57573773792715 ], [ 127.01850709089783, 37.57617422094965 ],
+  [ 127.01858886996178, 37.57726860749236 ], [ 127.01920504967556, 37.57799962354621 ],
+  [ 127.02014516729398, 37.57841100482445 ], [ 127.02029087365085, 37.57816561977413 ],
+  [ 127.02031819359276, 37.57667885776445 ], [ 127.02086459243103, 37.57547354832799 ],
+  [ 127.01979000804914, 37.57497554052983 ], [ 127.01999946093714, 37.57452083484892 ],
+  [ 127.01935598174003, 37.57431377647724 ]
+];
+
+const coordsSinsok3857 = coordsSinsok.map(function(coord) { return ol.proj.fromLonLat(coord); });
+const polySinsok = new ol.geom.Polygon([coordsSinsok3857]);
+const featureSinsok = new ol.Feature({ geometry: polySinsok, name: '신속통합정비구역' });
+sourceSinsok.addFeature(featureSinsok);
+
+
+
+
+$(function(){
+    vmap.getView().setZoom(17); 
+});
+</script>
+<script type="text/javascript">
+/* --- [영역 1] 기존 WMS 설정 (절대 수정하지 않음) --- */
+// (사용자님께서 제공하신 기존 WMS 레이어 생성 코드와 동일한 부분)
+// ... wmsAgeLayer 생성 및 vmap.addLayer(wmsAgeLayer) 코드 ...
+
+/* --- [영역 2] 분석용 Data API 호출 및 테이블 렌더링 (추가됨) --- */
+// 폴리곤을 WFS/Data API 필터 형식으로 변환
+function getPolygonWKT(coords) {
+    return "POLYGON((" + coords.map(c => c[0] + " " + c[1]).join(",") + "))";
+}
+
+function runAnalysis(coords) {
+    const wkt = getPolygonWKT(coords);
+    const apiUrl = "https://api.vworld.kr/req/data";
+    
+    $.ajax({
+        url: apiUrl,
+        dataType: 'jsonp',
+        data: {
+            key: 'CEB52025-E065-364C-9DBA-44880E3B02B8',
+            domain: 'http://localhost:8080',
+            service: 'data',
+            version: '2.0',
+            request: 'getfeature',
+            format: 'json',
+            size: 1000,
+            data: 'LT_C_BLDGINFO',
+            geomfilter: wkt
+        },
+        jsonpCallback: 'callback',
+        success: function(data) {
+            if (!data.response || !data.response.result) return;
+            
+            const features = new ol.format.GeoJSON().readFeatures(data.response.result.featureCollection);
+            
+            // 1. 테이블 렌더링 로직 (사용자 제공 코드 기반)
+            renderStatsTable(features);
+            
+            // 2. 지도에 벡터 레이어 추가 로직 (기존 스타일 유지)
+            addAnalysisLayer(features);
+        }
+    });
+}
+
+/* 1. 스타일링 함수 (Feature의 속성값에 따라 색상 반환) */
+function getStyleByAge(feature) {
+    const useapr_day = feature.get('useapr_day');
+    const years = (useapr_day && !isNaN(useapr_day)) ? getYearsAgo(useapr_day) : -1;
+
+    let fillColor = 'rgba(204, 204, 204, 0.7)'; // 정보 없음
+    if (years >= 30) fillColor = 'rgba(255, 0, 0, 0.8)';        // 30년 이상 (노후)
+    else if (years >= 20) fillColor = 'rgba(255, 215, 207, 0.8)'; // 20~30년 미만
+    else if (years >= 10) fillColor = 'rgba(5, 122, 255, 0.8)';   // 10~20년 미만
+    else if (years >= 0)  fillColor = 'rgba(137, 175, 201, 0.8)'; // 10년 미만
+
+    return new ol.style.Style({
+        fill: new ol.style.Fill({ color: fillColor }),
+        stroke: new ol.style.Stroke({ color: '#232323', width: 1 })
+    });
+}
+
+
+/* 2. 벡터 레이어 생성 및 스타일 적용 (runAnalysis 함수 수정) */
+function addAnalysisLayer(features) {
+    // 1. 기존 분석 레이어(id: 'vectorLayer')가 있다면 삭제
+    vmap.getLayers().forEach(layer => {
+        if (layer.get('id') === 'vectorLayer') vmap.removeLayer(layer);
+    });
+
+    // 2. 벡터 레이어 생성 (데이터 좌표계를 지도 좌표계로 자동 변환)
+    const vectorLayer = new ol.layer.Vector({
+        id: 'vectorLayer',
+        source: new ol.source.Vector({
+            // 읽어온 features의 좌표계를 3857로 변환하여 소스에 추가
+            features: features.map(feat => {
+                feat.getGeometry().transform('EPSG:4326', 'EPSG:3857');
+                return feat;
+            })
+        }),
+        // 위에서 정의하신 getStyleByAge 함수를 그대로 사용하여 스타일 적용
+        style: getStyleByAge 
+    });
+    
+    // 3. 레이어 추가
+    vmap.addLayer(vectorLayer);
+}
+
+// 초기 실행 (coordsSinsok 변수는 기존 코드에 정의되어 있음)
+$(function() {
+    runAnalysis(coordsSinsok);
+});
+
+function renderStatsTable(features) {
+    let totalCount = features.length;
+    let oldCount = 0, oldTotalArea = 0;
+    
+    // 통계 변수 초기화
+    let agingStats = {'데이터없음':0, '10년미만':0, '10~20년미만':0, '20~30년미만':0, '30년이상':0};
+    let floorStats = {'데이터없음':0, '1층':0, '2층':0, '3층':0, '4층':0, '5층이상':0};
+
+    // 통계 계산
+    features.forEach(function(feat) {
+        const grnd_flr = feat.get('grnd_flr');
+        const useapr_day = feat.get('useapr_day');
+        const totalarea = feat.get('totalarea');
+
+        // 노후도 계산
+        let agR;
+        if (!useapr_day || isNaN(useapr_day)) { agR = '데이터없음'; } 
+        else { agR = agingRange(getYearsAgo(useapr_day)); }
+        agingStats[agR]++;
+
+        if (agR === '30년이상') {
+            oldCount++;
+            oldTotalArea += parseInt(totalarea || 0, 10);
+        }
+
+        // 층수 계산
+        let flR;
+        if (!grnd_flr || isNaN(grnd_flr) || grnd_flr == 0) { flR = '데이터없음'; } 
+        else { flR = floorRange(grnd_flr); }
+        floorStats[flR]++;
+    });
+
+    // HTML 렌더링
+    document.getElementById("stats").innerHTML = `
+        <table class='table table-bordered table-sm table-hover'>
+            <tr><th>구분</th><th>값</th></tr>
+            <tr><td>전체 개수</td><td>${totalCount}</td></tr>
+            <tr><td>30년이상 노후 건물 개수</td><td>${oldCount}</td></tr>
+            <tr><td>30년이상 총 연면적</td><td>${oldTotalArea}</td></tr>
+        </table>`;
+    
+    document.getElementById("ageTable").innerHTML = `
+        <h4>노후도별 동수</h4>
+        <table class='table table-bordered table-sm table-hover'>
+            <tr><th>범주</th><th>동수</th></tr>
+            <tr><td>데이터없음</td><td>${agingStats['데이터없음']}</td></tr>
+            <tr><td>10년미만</td><td>${agingStats['10년미만']}</td></tr>
+            <tr><td>10~20년미만</td><td>${agingStats['10~20년미만']}</td></tr>
+            <tr><td>20~30년미만</td><td>${agingStats['20~30년미만']}</td></tr>
+            <tr><td>30년이상</td><td>${agingStats['30년이상']}</td></tr>
+        </table>`;
+        
+    document.getElementById("floorTable").innerHTML = `
+        <h4>층수별 동수</h4>
+        <table class='table table-bordered table-sm table-hover'>
+            <tr><th>층수</th><th>동수</th></tr>
+            <tr><td>데이터없음</td><td>${floorStats['데이터없음']}</td></tr>
+            <tr><td>1층</td><td>${floorStats['1층']}</td></tr>
+            <tr><td>2층</td><td>${floorStats['2층']}</td></tr>
+            <tr><td>3층</td><td>${floorStats['3층']}</td></tr>
+            <tr><td>4층</td><td>${floorStats['4층']}</td></tr>
+            <tr><td>5층이상</td><td>${floorStats['5층이상']}</td></tr>
+        </table>`;
+}
+
+// 부가 유틸리티 함수 (기존 로직 보존)
+function getYearsAgo(d) { return new Date().getFullYear() - parseInt(d.toString().substring(0,4)); }
+function agingRange(y) {
+    if(y >= 30) return '30년이상';
+    if(y >= 20) return '20~30년미만';
+    if(y >= 10) return '10~20년미만';
+    return '10년미만';
+}
+function floorRange(f) {
+    if(f >= 5) return '5층이상';
+    return f + '층';
+}
+function safeVal(v) { return v || 0; }
+
+/* 팝업 오버레이 설정 */
+var overlay = new ol.Overlay({
+    element: document.getElementById('popup'),
+    autoPan: true,
+    autoPanAnimation: { duration: 250 }
+});
+vmap.addOverlay(overlay);
+
+
+vmap.on('singleclick', function(evt) {
+    let clickedFeature = null;
+
+    // 기존처럼 레이어 필터링하여 피처 찾기
+    vmap.forEachFeatureAtPixel(evt.pixel, function(feature, layer) {
+        if (layer !== layerSinsok && layer !== selectLayer) { // 강조 레이어 자신은 제외
+            clickedFeature = feature;
+            return true;
+        }
+    });
+
+    // 기존 강조 레이어 비우기
+    selectSource.clear();
+
+    if (clickedFeature) {
+        // 1. 선택된 피처를 강조 레이어에 추가 (자동으로 yellow 스타일 적용됨)
+        selectSource.addFeature(clickedFeature);
+
+
+        console.log("--- 선택된 Feature의 모든 정보 ---");
+        console.log("Feature 객체:", clickedFeature);
+        console.log("Properties(속성):", clickedFeature.getProperties());
+        
+        // 2. 기존 팝업 로직 (props 추출)
+        // 클릭 이벤트 핸들러 내부의 content 변수 부분
+        let props = clickedFeature.getProperties();
+
+        // 유틸리티: 빈 값 처리
+        const val = (v) => (v && v !== "0" ? v : "정보없음");
+
+        let content = `
+            <div style="font-size: 13px; line-height: 1.6;">
+                <strong style="color: #1e293b; font-size: 15px;">건축물 상세정보</strong>
+                <hr style="margin: 5px 0;">
+                
+                <div style="margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #ff4500;">■ 기본 정보</div>
+                    건축물명: ${val(props.bld_nm)}<br/>
+                    사용승인일: ${val(props.useapr_day)}<br/>
+                    대지면적: ${val(props.platarea)}㎡
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #007bff;">■ 규모 및 면적</div>
+                    연면적: ${val(props.totalarea)}㎡<br/>
+                    규모: 지상 ${val(props.grnd_flr)}층 / 지하 ${val(props.ugrnd_flr)}층
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                    <div style="font-weight: 600; color: #28a745;">■ 건축 상세</div>
+                    건폐율: ${props.bc_rat !== "0" ? props.bc_rat + '%' : '정보없음'}<br/>
+                    용적률: ${props.vl_rat !== "0" ? props.vl_rat + '%' : '정보없음'}<br/>
+                    건축면적: ${val(props.archarea)}㎡
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('popup-content').innerHTML = content;
+        document.getElementById('popup').style.display = 'block';
+        overlay.setPosition(evt.coordinate);
+    } else {
+        // 클릭한 곳에 피처가 없으면 팝업 및 강조 숨김
+        document.getElementById('popup').style.display = 'none';
+        overlay.setPosition(undefined);
+    }
+});
+
+// 선택된 건물을 그릴 별도 레이어
+let selectSource = new ol.source.Vector();
+let selectLayer = new ol.layer.Vector({
+    source: selectSource,
+    style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: '#FFFF00', width: 3 }), // 노란색 테두리 강조
+        fill: new ol.style.Fill({ color: 'rgba(255, 255, 0, 0.2)' })
+    }),
+    zIndex: 20 // 가장 위에 표시
+});
+vmap.addLayer(selectLayer);
+
+</script>
+
+</body>
+</html>
