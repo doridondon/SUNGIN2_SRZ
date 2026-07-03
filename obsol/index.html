@@ -3,7 +3,7 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>숭인2동 노후도 분석 </title>
+<title>숭인2동 노후도 분석</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script type="text/javascript" src="https://map.vworld.kr/js/webglMapInit.js.do?version=3.0&apiKey=CEB52025-E065-364C-9DBA-44880E3B02B8"></script>
@@ -72,6 +72,49 @@ html, body {
     border-radius: 6px;
     text-align: center;
 }
+
+/* 팝업창 스타일 개선 */
+#popup {
+    max-width: 90vw;        /* 화면 너비의 최대 90% */
+    max-height: 40vh;       /* 화면 높이의 최대 40% (화면을 덜 가림) */
+    overflow-y: auto;       /* 내용이 많으면 팝업 내부에서 스크롤 */
+    z-index: 2000;          /* 다른 요소들보다 위에 표시 */
+    pointer-events: auto;   /* 클릭 가능 */
+}
+
+/* 분석 결과 컨테이너도 너무 크다면 적절히 조정 */
+#analysis-container {
+    max-height: 50vh;       /* 분석 결과창도 화면의 절반으로 제한 */
+    overflow-y: auto;       /* 스크롤 가능 */
+}
+
+/* 분석 결과창 스타일 최적화 */
+#analysis-container {
+    position: absolute;
+    top: 20px;          /* 상단 범례와 맞춤 */
+    right: 20px;
+    z-index: 1000;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 15px;
+    border-radius: 12px;
+    width: 260px;       /* 조금 더 좁게 */
+    max-height: 80vh;   /* 화면 높이의 80%로 제한 */
+    overflow-y: auto;   /* 내용이 많으면 내부 스크롤 */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 12px;    /* 폰트 크기를 줄여 정보 밀도 확보 */
+}
+
+/* 테이블의 여백과 폰트 크기 조정 */
+#analysis-container table {
+    margin-bottom: 10px !important;
+    font-size: 11px;
+}
+
+#analysis-container h4, #analysis-container h5 {
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
 </style>
 </head>
 
@@ -90,17 +133,21 @@ html, body {
     </div>
 </div>
 
-<div id="analysis-container" style="position: absolute; top: 150px; right: 20px; z-index: 1000; background: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 10px; width: 300px;">
-    <h5>분석 결과</h5>
-    <div id="stats"></div>
-    <div id="ageTable"></div>
-    <div id="floorTable"></div>
-    <div id="featureTable"></div>
-    <div id="targetUrl" style="display:none;"></div> </div>
-
-    <div id="popup" style="background: white; padding: 10px; border-radius: 8px; border: 1px solid #ccc; display: none; min-width: 200px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
-        <div id="popup-content"></div>
+<div id="analysis-container">
+    <div id="header-area" style="cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="$('#content-area').slideToggle();">
+        <h5 style="margin:0;">분석 결과</h5>
+        <span id="toggle-btn">▼</span>
     </div>
+    <div id="content-area">
+        <div id="stats"></div>
+        <div id="ageTable"></div>
+        <div id="floorTable"></div>
+        <div id="featureTable"></div>
+    </div>
+</div>
+
+
+
 <script type="text/javascript">
 
 
@@ -169,7 +216,6 @@ const coordsSinsok3857 = coordsSinsok.map(function(coord) { return ol.proj.fromL
 const polySinsok = new ol.geom.Polygon([coordsSinsok3857]);
 const featureSinsok = new ol.Feature({ geometry: polySinsok, name: '신속통합정비구역' });
 sourceSinsok.addFeature(featureSinsok);
-
 
 
 
@@ -436,6 +482,14 @@ let selectLayer = new ol.layer.Vector({
 });
 vmap.addLayer(selectLayer);
 
+
+// 접기 버튼 모양 변경 (선택사항)
+$('#header-area').on('click', function() {
+    let text = $('#toggle-btn').text();
+    $('#toggle-btn').text(text === '▼' ? '▲' : '▼');
+});
+
+$('#header-area').trigger("click")
 </script>
 
 </body>
