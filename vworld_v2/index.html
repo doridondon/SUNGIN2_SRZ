@@ -19,7 +19,7 @@ html, body {
     background: rgba(255, 255, 255, 0.95); padding: 12px 16px;
     border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px; max-height: 80vh; overflow-y: auto; width: 200px;
+    font-size: 20px; max-height: 80vh; overflow-y: auto; width: 200px;
 }
 .layer-section { margin-bottom: 10px; padding-bottom: 5px; }
 .layer-section:not(:last-child) { border-bottom: 1px solid #eee; }
@@ -109,6 +109,7 @@ html, body {
     <div id="popup-content"></div>
 </div>
 
+
 <script>
 
 //=========================
@@ -187,10 +188,10 @@ function initVectorLayers() {
             stroke: new ol.style.Stroke({ color: "#ff8c00", width: 3 }),
             fill: new ol.style.Fill({ color: "rgba(255, 140, 0, 0.2)" }),
             text: new ol.style.Text({
-            text: "가로주택 1구역\n(신통기획 찬성)",
-            font: "14px sans-serif",
+            text: "가로주택 1구역\n(대표 자진 사임)",
+            font: "bold 16px sans-serif",
             fill: new ol.style.Fill({ color: "#000" }),
-            stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+            stroke: new ol.style.Stroke({ color: "#fff", width: 0.5 }),
             overflow: true,
             placement: "point",
             textAlign: "center",
@@ -208,9 +209,9 @@ function initVectorLayers() {
             fill: new ol.style.Fill({ color: "rgba(255, 0, 0, 0.2)" }),
             text: new ol.style.Text({
                 text: "[가로 2구역]\n  (핵심 문제 지역)\n 주민 선출 없이 등록 후 \n독단적 사임 거부 중",
-                font: "14px sans-serif",
+                font: "bold 16px sans-serif",
                 fill: new ol.style.Fill({ color: "#000" }),
-                stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+                stroke: new ol.style.Stroke({ color: "#fff", width: 0.5 }),
                 overflow: true,
                 placement: "point",
                 textAlign: "center",
@@ -228,9 +229,9 @@ function initVectorLayers() {
             fill: new ol.style.Fill({ color: "rgba(148, 0, 211, 0.2)" }),
             text: new ol.style.Text({
                 text: "가로주택 3구역\n(주민 대표 주택 매도)\n추진 자격 상실\n 및 사업 무산",
-                font: "14px sans-serif",
+                font: "bold 16px sans-serif",
                 fill: new ol.style.Fill({ color: "#000" }),
-                stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+                stroke: new ol.style.Stroke({ color: "#fff", width: 0.5 }),
                 overflow: true,
                 placement: "point",
                 textAlign: "center",
@@ -248,9 +249,9 @@ function initVectorLayers() {
             fill: new ol.style.Fill({ color: "rgba(0, 85, 255, 0.15)" }),
             text: new ol.style.Text({
                 text: "쪼개진 가로주택 해제,\n 대규모 신속통합기획으로\n 하나의 대단지 통합 정비!\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
-                font: "14px sans-serif",
+                font: "bold 20px sans-serif",
                 fill: new ol.style.Fill({ color: "#000" }),
-                stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+                stroke: new ol.style.Stroke({ color: "#fff", width: 0.5 }),
                 overflow: true,
                 placement: "point",
                 textAlign: "center",
